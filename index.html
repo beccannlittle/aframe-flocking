@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hello, WebVR! - A-Frame</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r79/three.min.js"></script>
+    <meta name="description" content="A-Frame Flocking">
+    <script src="https://aframe.io/releases/0.5.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-animation-component@3.2.1/dist/aframe-animation-component.min.js"></script>
+    <script src="BoidController.js"></script>
+  </head>
+  <body>
+      <a-scene>
+        <a-assets>
+      <img id="Sky" src="https://cdn.glitch.com/df869570-5864-491e-b3c3-2740c8dbd6a8%2FSKy.png?1495816581474">
+    </a-assets>
+      <a-entity boidcontroller></a-entity>
+      <a-camera position="0 -2 3"></a-camera>
+      <a-sky src="#Sky"></a-sky>
+    </a-scene>
+  </body>
+</html>
