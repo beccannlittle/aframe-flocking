@@ -1,4 +1,4 @@
-var boidCount = 3
+var boidCount = 2
 var cohesionEase = 100
 var avoidanceEase = 1000
 var avoidanceDist = .5
@@ -13,7 +13,6 @@ AFRAME.registerComponent('boidcontroller',{
       scene.appendChild(boid)
       this.boids[i] = {id: 'boid' + i}
     }
-    
   },
   tick: function () {
     var boids = this.boids
@@ -21,15 +20,19 @@ AFRAME.registerComponent('boidcontroller',{
     for(var i = 0; i < boids.length; i++){
       centerOfMass.add(document.getElementById(boids[i].id).getAttribute('position'))
     }
-    centerOfMass.divideScalar(boidCount);
+    centerOfMass.divideScalar(boidCount)
     // Calculate distance to move
     for(var i = 0; i < boids.length;i++){
       var currentEl = document.getElementById(boids[i].id)
       var currentPos = currentEl.object3D.position
       var move = new THREE.Vector3()
-      move.add(cohesion(centerOfMass, currentPos))
-      move.add(avoidance(boids[i].id, currentPos))
-      // move.add(alignment(boids[i]))
+      var cohesMove = new THREE.Vector3()
+      cohesMove = cohesion(centerOfMass, currentPos)
+      move.add(cohesMove)
+      var avoidMove = new THREE.Vector3()
+      avoidMove = avoidance(currentEl,boids[i].id, currentPos)
+      move.add(avoidMove)
+
       // Match Velocity
       boids[i].velocity = move
     }
@@ -37,7 +40,6 @@ AFRAME.registerComponent('boidcontroller',{
     for(var i = 0; i < boids.length;i++){
       var currentBoidEl = document.getElementById(boids[i].id)
       var currentPosition = currentBoidEl.object3D.position
-      
       currentBoidEl.setAttribute('position', currentPosition.add(boids[i].velocity))
     }
     // COHESION
@@ -46,7 +48,7 @@ AFRAME.registerComponent('boidcontroller',{
       return movementVector.divideScalar(cohesionEase)
     }
     // AVOIDANCE / SEPARATION
-    function avoidance(currentId, currentPos) {
+    function avoidance(currentEl,currentId, currentPos) {
       var amountToMove = new THREE.Vector3()
       var collisionCount = 0
       for(var i = 0; i < boids.length; i++){
@@ -55,9 +57,8 @@ AFRAME.registerComponent('boidcontroller',{
           var distanceToOther = currentPos.distanceTo(otherPos)
           if(distanceToOther < avoidanceDist){
             var scale = avoidanceDist - distanceToOther
-            console.log(scale)
+            amountToMove.add((otherPos.sub(currentPos).divideScalar(distanceToOther)))
             collisionCount++
-            amountToMove.sub(otherPos.sub(currentPos)).divideScalar(avoidanceEase)
           }
         }
       }
