@@ -1,83 +1,108 @@
-var boidCount = 2
-var cohesionEase = 100
-var avoidanceEase = 1000
-var avoidanceDist = .5
+// Psuedocode: http://www.kfish.org/boids/pseudocode.html
 
-AFRAME.registerComponent('boidcontroller',{
-  init: function () {
+var boidCount = 5
+var terminalVelocity = 0.025
+var cohesionEase = 1000
+var avoidanceDist = 1
+var avoidanceEase = 1500
+var alignmentEase = 8
+
+AFRAME.registerSystem('boidcontroller', {
+  schema: {
+    boids: {default: []}
+  },
+  init: function() {
     var scene = document.querySelector('a-scene')
-    this.center = THREE.Vector3()
-    this.boids = new Array(boidCount)
-    for(var i = 0; i < this.boids.length;i++){
+    for(var i = 0; i < boidCount;i++){
       var boid = BuildBoid(i)
       scene.appendChild(boid)
-      this.boids[i] = {id: 'boid' + i}
+      this.data.boids[i] = {
+        id: 'boid' + i,
+        velocity: null
+      }
     }
-  },
-  tick: function () {
-    var boids = this.boids
-    var centerOfMass = new THREE.Vector3()
-    for(var i = 0; i < boids.length; i++){
-      centerOfMass.add(document.getElementById(boids[i].id).getAttribute('position'))
-    }
-    centerOfMass.divideScalar(boidCount)
-    // Calculate distance to move
-    for(var i = 0; i < boids.length;i++){
-      var currentEl = document.getElementById(boids[i].id)
-      var currentPos = currentEl.object3D.position
-      var move = new THREE.Vector3()
-      var cohesMove = new THREE.Vector3()
-      cohesMove = cohesion(centerOfMass, currentPos)
-      move.add(cohesMove)
-      var avoidMove = new THREE.Vector3()
-      avoidMove = avoidance(currentEl,boids[i].id, currentPos)
-      move.add(avoidMove)
+  }
+})
 
-      // Match Velocity
-      boids[i].velocity = move
-    }
-    // Move
+AFRAME.registerComponent('boidcontroller',{
+  tick: function () {
+    //MAIN
+    var boids = this.system.data.boids
+
+    var cohesionVector, avoidVector, alignVector = new THREE.Vector3()
+    
     for(var i = 0; i < boids.length;i++){
-      var currentBoidEl = document.getElementById(boids[i].id)
-      var currentPosition = currentBoidEl.object3D.position
-      currentBoidEl.setAttribute('position', currentPosition.add(boids[i].velocity))
+      
+      var currentId = boids[i].id
+      var currentEl = document.getElementById(currentId)
+      
+      var currentPos = currentEl.object3D.position
+      var currentVel = boids[i].velocity || new THREE.Vector3(0,0,0)
+
+      
+      //Generate Vectors
+      cohesionVector = this.cohesion(boids, currentPos,currentId)
+      avoidVector = this.avoidance(boids,currentPos, currentId, currentEl)
+      alignVector = this.alignment(boids,currentPos, currentId)
+      
+      //Combine Velocities
+      var newVelocity = currentVel
+      newVelocity.add(cohesionVector)
+      newVelocity.add(avoidVector)
+      //newVelocity.add(alignVector)
+      
+      newVelocity.clampLength(0,terminalVelocity)
+        
+      
+      boids[i].velocity = newVelocity
+
+      //Update Position
+      var newPosition = currentPos.add(newVelocity)
+      var posString = newPosition.x + ' ' + newPosition.y + ' ' + newPosition.z
+      currentEl.setAttribute('position', posString)
+      
     }
-    // COHESION
-    function cohesion(centerOfMass, currentPos) {
-      var movementVector = centerOfMass.sub(currentPos)
-      return movementVector.divideScalar(cohesionEase)
+    //END OF MAIN
+  },
+  cohesion: function(boids, currentPos, currentId) {
+    var movement = new THREE.Vector3()
+    for(var i = 0; i < boids.length;i++){
+      if(currentId != boids[i].id) {
+        var otherBoidEl = document.getElementById(boids[i].id)
+        var otherBoidPos = otherBoidEl.object3D.position
+        movement.add(otherBoidPos)
+      }
     }
-    // AVOIDANCE / SEPARATION
-    function avoidance(currentEl,currentId, currentPos) {
-      var amountToMove = new THREE.Vector3()
-      var collisionCount = 0
-      for(var i = 0; i < boids.length; i++){
-        if(currentId != boids[i].id){
-          var otherPos = document.getElementById(boids[i].id).object3D.position
-          var distanceToOther = currentPos.distanceTo(otherPos)
-          if(distanceToOther < avoidanceDist){
-            var scale = avoidanceDist - distanceToOther
-            amountToMove.add((otherPos.sub(currentPos).divideScalar(distanceToOther)))
-            collisionCount++
-          }
+    movement = movement.divideScalar(boidCount-1)
+    return (movement.sub(currentPos)).divideScalar(cohesionEase)
+  },
+  avoidance: function (boids, currentPos, currentId, currentEl){
+    var movement = new THREE.Vector3(0,0,0)
+    for(var i = 0; i < boids.length;i++){
+      if(currentId != boids[i].id) {
+        var otherBoidEl = document.getElementById(boids[i].id)
+        var otherBoidPos = otherBoidEl.object3D.position
+        var combinedRadius = parseFloat(currentEl.getAttribute('radius')) + parseFloat(otherBoidEl.getAttribute('radius'))
+        if(otherBoidPos.distanceTo(currentPos) < (avoidanceDist + combinedRadius)){
+          movement.sub(otherBoidPos).sub(currentPos)
         }
       }
-      amountToMove.divideScalar(collisionCount)
-      return amountToMove.divideScalar(avoidanceEase);
     }
-    // ALIGNMENT
-    function alignment(currentId) {
-      var amountToMove = new THREE.Vector3(0,0,0)
-      for(var j = 0; j < boids.length; j++) {
-        if(currentId != boids[j].id) {
-          amountToMove.add(document.getElementById(boids[i].id).getAttribute('velocity'))
-        }
-      }
-      amountToMove.divideScalar(boidCount-1)
-      amountToMove.sub(document.getElementById(boids[i].id).getAttribute('velocity'))
-      amountToMove.divideScalar(8)
-      return amountToMove
-    }
+    
+    return movement.divideScalar(avoidanceEase)
+    
+    
+  },
+  alignment: function (boids,currentPos, currentId){
+    // var movement = new THREE.Vector3()
+    // for(var i = 0; i < boids.length;i++){
+    //   if(currentId != boids[i].id) {
+    //     var otherBoidVel = boids[i].velocity
+    //     movement.add(otherBoidVel)
+    //   }
+    // }
+    // movement = movement.divideScalar(boidCount-1)
+    // return (movement.sub(currentPos)).divideScalar(alignmentEase)
   }
 });
 
@@ -86,14 +111,22 @@ function BuildBoid(index) {
   sphere.setAttribute('id', 'boid' + index)
   sphere.setAttribute('color', RandomHexColor())
   sphere.setAttribute('radius', '0.25')
-  var randomPosition = new THREE.Vector3(Math.random() * 3 - 1.5,Math.random() * 3 - 1.5,Math.random() * 3 - 1.5)
+  var randomPosition = RandomPosition()
   var startPositions = [
     new THREE.Vector3(1,0,0),
     new THREE.Vector3(-1,0,0),
     new THREE.Vector3(0, 0, 1)
   ]
   sphere.setAttribute('position', randomPosition)
+  //console.log('Starting Pos='+randomPosition.x+'.'+randomPosition.y+'.'+randomPosition.z)
+  // sphere.setAttribute('position', startPositions[index])
+  
+  //console.log('Starting Pos='+startPositions[index].x+'.'+startPositions[index].y+'.'+startPositions[index].z)
   return(sphere)
+}
+
+function RandomPosition(){
+  return new THREE.Vector3(Math.random() * 3 - 1.5,Math.random() * 3 - 1.5,Math.random() * 3 - 1.5)
 }
 
 function RandomHexColor(){
