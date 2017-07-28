@@ -1,11 +1,11 @@
 // Psuedocode: http://www.kfish.org/boids/pseudocode.html
 
-var boidCount = 5
-var terminalVelocity = 0.025
-var cohesionEase = 1000
-var avoidanceDist = 1
-var avoidanceEase = 1500
-var alignmentEase = 8
+var boidCount = 13
+var terminalVelocity = 0.5
+var cohesionEase = 100
+var avoidanceDist = .25
+var avoidanceEase = 75
+var alignmentEase = 100
 
 AFRAME.registerSystem('boidcontroller', {
   schema: {
@@ -18,15 +18,18 @@ AFRAME.registerSystem('boidcontroller', {
       scene.appendChild(boid)
       this.data.boids[i] = {
         id: 'boid' + i,
-        velocity: null
+        velocity: RandomPosition()
       }
     }
   }
 })
 
+var tickCount = 0
+
 AFRAME.registerComponent('boidcontroller',{
   tick: function () {
     //MAIN
+    tickCount++
     var boids = this.system.data.boids
 
     var cohesionVector, avoidVector, alignVector = new THREE.Vector3()
@@ -43,21 +46,24 @@ AFRAME.registerComponent('boidcontroller',{
       //Generate Vectors
       cohesionVector = this.cohesion(boids, currentPos,currentId)
       avoidVector = this.avoidance(boids,currentPos, currentId, currentEl)
-      alignVector = this.alignment(boids,currentPos, currentId)
+      alignVector = this.alignment(boids,currentVel, currentId)
       
       //Combine Velocities
       var newVelocity = currentVel
+      //var newVelocity = new THREE.Vector3(0,0,0)
       newVelocity.add(cohesionVector)
       newVelocity.add(avoidVector)
-      //newVelocity.add(alignVector)
+      newVelocity.add(alignVector)
+      if (tickCount%1000 == 0) {
+        newVelocity.add(RandomPosition())
+      }
       
       newVelocity.clampLength(0,terminalVelocity)
-        
-      
       boids[i].velocity = newVelocity
 
       //Update Position
       var newPosition = currentPos.add(newVelocity)
+
       var posString = newPosition.x + ' ' + newPosition.y + ' ' + newPosition.z
       currentEl.setAttribute('position', posString)
       
@@ -83,26 +89,35 @@ AFRAME.registerComponent('boidcontroller',{
         var otherBoidEl = document.getElementById(boids[i].id)
         var otherBoidPos = otherBoidEl.object3D.position
         var combinedRadius = parseFloat(currentEl.getAttribute('radius')) + parseFloat(otherBoidEl.getAttribute('radius'))
-        if(otherBoidPos.distanceTo(currentPos) < (avoidanceDist + combinedRadius)){
-          movement.sub(otherBoidPos).sub(currentPos)
+        var distanceToOtherBoid = otherBoidPos.distanceTo(currentPos)
+        if(distanceToOtherBoid < (avoidanceDist + combinedRadius)){
+          // Try #1
+          //movement.sub(otherBoidPos).sub(currentPos)
+          // Try #2
+          var subMove = new THREE.Vector3()
+          subMove.subVectors(otherBoidPos,currentPos)
+          movement.sub(subMove)
+          // Try #3
+           //movement.sub(distanceToOtherBoid)
         }
+
       }
     }
-    
     return movement.divideScalar(avoidanceEase)
+    //return movement.normalize().divideScalar(avoidanceEase)
     
     
   },
-  alignment: function (boids,currentPos, currentId){
-    // var movement = new THREE.Vector3()
-    // for(var i = 0; i < boids.length;i++){
-    //   if(currentId != boids[i].id) {
-    //     var otherBoidVel = boids[i].velocity
-    //     movement.add(otherBoidVel)
-    //   }
-    // }
-    // movement = movement.divideScalar(boidCount-1)
-    // return (movement.sub(currentPos)).divideScalar(alignmentEase)
+  alignment: function (boids,currentVel, currentId){
+     var movement = new THREE.Vector3()
+     for(var i = 0; i < boids.length;i++){
+       if(currentId != boids[i].id) {
+         var otherBoidVel = boids[i].velocity || new THREE.Vector3(0,0,0)
+         movement.add(otherBoidVel)
+       }
+     }
+     movement = movement.divideScalar(boidCount-1)
+     return (movement.sub(currentVel)).divideScalar(alignmentEase)
   }
 });
 
@@ -115,7 +130,7 @@ function BuildBoid(index) {
   var startPositions = [
     new THREE.Vector3(1,0,0),
     new THREE.Vector3(-1,0,0),
-    new THREE.Vector3(0, 0, 1)
+    new THREE.Vector3(0,0,1)
   ]
   sphere.setAttribute('position', randomPosition)
   //console.log('Starting Pos='+randomPosition.x+'.'+randomPosition.y+'.'+randomPosition.z)
@@ -127,6 +142,8 @@ function BuildBoid(index) {
 
 function RandomPosition(){
   return new THREE.Vector3(Math.random() * 3 - 1.5,Math.random() * 3 - 1.5,Math.random() * 3 - 1.5)
+  // return new THREE.Vector3(Math.random() * 3 - 1.5,Math.random() * 3 - 1.5,0)
+  //return new THREE.Vector3(Math.random() * 3 - 1.5,0,0)
 }
 
 function RandomHexColor(){
@@ -136,4 +153,10 @@ function RandomHexColor(){
     color += colors.charAt(Math.floor(Math.random()*16))
   }
   return color
+}
+function DisplayVector3(vec3) {
+  return "X:"+vec3.x+" Y:"+vec3.y+" Z:"+vec3.z
+}
+function printVector3(descr, vec3) {
+  console.log(descr + ": X:"+vec3.x+" Y:"+vec3.y+" Z:"+vec3.z)
 }
